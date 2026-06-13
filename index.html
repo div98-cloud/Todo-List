@@ -301,7 +301,27 @@
     window.scrollTo(0,0);
   };
 
+  // Only react to explicit sign-in/sign-out events, not passive session restore
   sb.auth.onAuthStateChange(async(event,session)=>{
+    console.log('Auth event:', event);
+    if(event === 'SIGNED_IN' && session?.user){
+      currentUser=session.user;
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      document.getElementById('listPage').classList.add('active');
+      window.scrollTo(0,0);
+      setDateHeading();
+      await fetchTasks();
+    } else if(event === 'SIGNED_OUT'){
+      tasks=[];currentUser=null;
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      document.getElementById('authPage').classList.add('active');
+      window.scrollTo(0,0);
+    }
+  });
+
+  // Check if already logged in on page load (but don't auto-navigate away from auth)
+  (async()=>{
+    const{data:{session}}=await sb.auth.getSession();
     if(session?.user){
       currentUser=session.user;
       document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -309,13 +329,8 @@
       window.scrollTo(0,0);
       setDateHeading();
       await fetchTasks();
-    } else {
-      tasks=[];
-      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-      document.getElementById('authPage').classList.add('active');
-      window.scrollTo(0,0);
     }
-  });
+  })();
 
   // ── Pages ──
   function showPage(id){
