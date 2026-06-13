@@ -191,7 +191,7 @@
     </div>
     <div class="header-right">
       <span class="header-count" id="taskCount">0 tasks</span>
-      <button class="btn-signout" onclick="signOut()">Sign out</button>
+      <button class="btn-signout" id="btnSignOut">Sign out</button>
     </div>
   </header>
   <main class="list-main">
@@ -353,18 +353,24 @@
 
   // ── Supabase CRUD ──
   async function fetchTasks(){
+    if(!currentUser){render();return;}
     document.getElementById('taskList').innerHTML='<div class="loading-state">Loading your tasks…</div>';
     try {
-      const{data,error}=await sb.from('todos').select('*').order('position',{ascending:true}).order('created_at',{ascending:true});
+      const{data,error}=await sb.from('todos')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('position',{ascending:true})
+        .order('created_at',{ascending:true});
       if(error){
         console.error('Fetch error:',error);
-        document.getElementById('taskList').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load tasks.<br>'+error.message+'</p></div>';
+        document.getElementById('taskList').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error: '+error.message+'</p></div>';
         return;
       }
-      tasks=data||[];render();
+      tasks=data||[];
+      render();
     } catch(e){
       console.error('Fetch exception:',e);
-      document.getElementById('taskList').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load tasks.<br>Check your connection.</p></div>';
+      document.getElementById('taskList').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load tasks.<br>Check your connection and try refreshing.</p></div>';
     }
   }
 
@@ -372,12 +378,34 @@
     const input=document.getElementById('taskInput');
     const title=input.value.trim();
     if(!title){input.focus();return;}
+    if(!currentUser){showToast('Not logged in — please sign in again');return;}
     const btn=document.getElementById('btnAdd');btn.disabled=true;
-    const maxPos=tasks.length>0?Math.max(...tasks.map(t=>t.position||0))+1:0;
-    const{data,error}=await sb.from('todos').insert({title,priority:selectedPriority,completed:false,notes:'',position:maxPos,user_id:currentUser.id}).select().single();
+    btn.textContent='Adding…';
+    try {
+      const maxPos=tasks.length>0?Math.max(...tasks.map(t=>t.position||0))+1:0;
+      const{data,error}=await sb.from('todos').insert({
+        title,
+        priority:selectedPriority,
+        completed:false,
+        notes:'',
+        position:maxPos,
+        user_id:currentUser.id
+      }).select().single();
+      if(error){
+        console.error('Insert error:',error);
+        showToast('Error: '+error.message);
+      } else {
+        tasks.unshift(data);
+        input.value='';
+        render();
+        showToast('Task added ✓');
+      }
+    } catch(e){
+      console.error('Insert exception:',e);
+      showToast('Failed to add task — check connection');
+    }
     btn.disabled=false;
-    if(error){showToast('Error adding task: '+error.message);return;}
-    tasks.unshift(data);input.value='';render();showToast('Task added');
+    btn.textContent='+ Add Task';
   };
 
   window.toggleComplete = async function(id){
@@ -549,6 +577,19 @@
     clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),2400);
   }
   window.showToast=showToast;
+
+  // Wire up sign out button via event listener (avoids module scope issues)
+  document.getElementById('btnSignOut').addEventListener('click', async()=>{
+    try { await sb.auth.signOut(); } catch(e){}
+    tasks=[];currentUser=null;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('authPage').classList.add('active');
+    window.scrollTo(0,0);
+    // Clear inputs
+    document.getElementById('authEmail').value='';
+    document.getElementById('authPassword').value='';
+    document.getElementById('authError').textContent='';
+  });
 </script>
 </body>
 </html>
