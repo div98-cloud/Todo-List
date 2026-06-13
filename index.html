@@ -294,18 +294,26 @@
   };
 
   window.signOut = async function() {
-    await sb.auth.signOut();
-    tasks=[];currentUser=null;showPage('authPage');
+    try { await sb.auth.signOut(); } catch(e) {}
+    tasks=[];currentUser=null;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.getElementById('authPage').classList.add('active');
+    window.scrollTo(0,0);
   };
 
-  sb.auth.onAuthStateChange(async(_,session)=>{
+  sb.auth.onAuthStateChange(async(event,session)=>{
     if(session?.user){
       currentUser=session.user;
-      showPage('listPage');
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      document.getElementById('listPage').classList.add('active');
+      window.scrollTo(0,0);
       setDateHeading();
       await fetchTasks();
     } else {
-      showPage('authPage');
+      tasks=[];
+      document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+      document.getElementById('authPage').classList.add('active');
+      window.scrollTo(0,0);
     }
   });
 
@@ -331,9 +339,18 @@
   // ── Supabase CRUD ──
   async function fetchTasks(){
     document.getElementById('taskList').innerHTML='<div class="loading-state">Loading your tasks…</div>';
-    const{data,error}=await sb.from('todos').select('*').order('position',{ascending:true}).order('created_at',{ascending:true});
-    if(error){showToast('Error loading tasks');return;}
-    tasks=data||[];render();
+    try {
+      const{data,error}=await sb.from('todos').select('*').order('position',{ascending:true}).order('created_at',{ascending:true});
+      if(error){
+        console.error('Fetch error:',error);
+        document.getElementById('taskList').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load tasks.<br>'+error.message+'</p></div>';
+        return;
+      }
+      tasks=data||[];render();
+    } catch(e){
+      console.error('Fetch exception:',e);
+      document.getElementById('taskList').innerHTML='<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load tasks.<br>Check your connection.</p></div>';
+    }
   }
 
   window.addTask = async function(){
